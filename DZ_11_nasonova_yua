@@ -1,0 +1,109 @@
+import json
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.style.use("seaborn-v0_8-darkgrid")
+plt.rcParams["figure.dpi"] = 300
+
+
+def load_data(path: str) -> pd.DataFrame:
+    """Загрузка JSON и преобразование в DataFrame."""
+    with open(path, "r", encoding="utf-8") as file:
+        raw_data = json.load(file)
+
+    records = [entry["result"] for entry in raw_data if "result" in entry]
+    df_local = pd.DataFrame(records)
+
+    print("✔ DataFrame успешно создан")
+    print(f"Событий: {df_local.shape[0]}, Полей: {df_local.shape[1]}")
+    
+    if "sourcetype" in df_local.columns:
+        print("Топ sourcetype:",
+              df_local["sourcetype"].value_counts().head(3).to_dict())
+
+    return df_local
+
+
+def plot_top_eventcodes(df: pd.DataFrame, filename: str):
+    """Построение графика топ-10 EventCode."""
+    top_events = (
+        df["EventCode"]
+        .value_counts()
+        .nlargest(10)
+        .reset_index()
+        .rename(columns={"index": "EventCode", "EventCode": "count"})
+    )
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    sns.barplot(data=top_events, x="EventCode", y="count", ax=ax)
+
+    ax.set_title("10 наиболее частых EventCode", fontsize=15)
+    ax.set_xlabel("EventCode")
+    ax.set_ylabel("Количество")
+    ax.tick_params(axis="x", rotation=45)
+
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches="tight")
+    plt.show()
+
+    print("\nТоп EventCode:")
+    print(top_events)
+
+
+def plot_top_destinations(df: pd.DataFrame, filename: str):
+    """Построение графика топ-10 DNS-адресов."""
+    if "dest" not in df.columns:
+        print("⚠ Поле 'dest' отсутствует в данных")
+        return
+
+    top_dest = df["dest"].value_counts().nlargest(10)
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.barplot(x=top_dest.index, y=top_dest.values, ax=ax)
+
+    ax.set_title("10 наиболее частых DNS-адресов (dest)")
+    ax.set_xlabel("Адрес / домен")
+    ax.set_ylabel("Количество запросов")
+    ax.tick_params(axis="x", rotation=45)
+
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches="tight")
+    plt.show()
+
+    print("\nТоп dest:")
+    print(top_dest)
+
+
+def plot_dns_eventcodes(df: pd.DataFrame, filename: str):
+    """Анализ EventCode только для DNS-событий."""
+    if "sourcetype" not in df.columns:
+        return
+
+    dns_only = df[df["sourcetype"].str.contains("DNS", case=False, na=False)]
+
+    if dns_only.empty:
+        print("DNS-события не найдены")
+        return
+
+    dns_top = dns_only["EventCode"].value_counts().nlargest(10)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.barplot(x=dns_top.index, y=dns_top.values, ax=ax)
+
+    ax.set_title("EventCode в DNS-событиях")
+    ax.tick_params(axis="x", rotation=45)
+
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches="tight")
+    plt.show()
+
+    print(f"\nВсего DNS-событий: {len(dns_only)}")
+
+
+if __name__ == "__main__":
+    df = load_data("botsv1.json")
+
+    plot_top_eventcodes(df, "top10_eventcode_dz11.png")
+    plot_top_destinations(df, "top10_dns_dest_dz11.png")
+    plot_dns_eventcodes(df, "dns_only_events_dz11.png")
